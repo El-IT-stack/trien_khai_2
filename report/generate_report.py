@@ -25,6 +25,20 @@ def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
     tcMar = parse_xml(f'<w:tcMar {nsdecls("w")}><w:top w:w="{top}" w:type="dxa"/><w:bottom w:w="{bottom}" w:type="dxa"/><w:left w:w="{left}" w:type="dxa"/><w:right w:w="{right}" w:type="dxa"/></w:tcMar>')
     tcPr.append(tcMar)
 
+def set_run_font(run, font_name="Times New Roman", size_pt=11, bold=False, italic=False, color_rgb=None):
+    run.font.name = font_name
+    run.font.size = Pt(size_pt)
+    run.bold = bold
+    run.italic = italic
+    if color_rgb:
+        run.font.color.rgb = color_rgb
+    rPr = run._r.get_or_add_rPr()
+    rFonts = rPr.get_or_add_rFonts()
+    rFonts.set(qn('w:ascii'), font_name)
+    rFonts.set(qn('w:hAnsi'), font_name)
+    rFonts.set(qn('w:cs'), font_name)
+    rFonts.set(qn('w:eastAsia'), font_name)
+
 def add_styled_heading(doc, text, level):
     h = doc.add_heading(text, level=level)
     h.paragraph_format.keep_with_next = True
@@ -32,20 +46,11 @@ def add_styled_heading(doc, text, level):
     h.paragraph_format.space_after = Pt(4)
     run = h.runs[0]
     if level == 1:
-        run.font.name = 'Arial'
-        run.font.size = Pt(15)
-        run.font.bold = True
-        run.font.color.rgb = RGBColor(15, 23, 42) # Slate 900
+        set_run_font(run, 'Times New Roman', 15, bold=True, color_rgb=RGBColor(15, 23, 42))
     elif level == 2:
-        run.font.name = 'Arial'
-        run.font.size = Pt(12.5)
-        run.font.bold = True
-        run.font.color.rgb = RGBColor(30, 41, 59) # Slate 800
+        set_run_font(run, 'Times New Roman', 12.5, bold=True, color_rgb=RGBColor(30, 41, 59))
     elif level == 3:
-        run.font.name = 'Arial'
-        run.font.size = Pt(11)
-        run.font.bold = True
-        run.font.color.rgb = RGBColor(51, 65, 85) # Slate 700
+        set_run_font(run, 'Times New Roman', 11, bold=True, color_rgb=RGBColor(51, 65, 85))
     return h
 
 def add_p(doc, text="", bold_prefix=None, space_after=4):
@@ -54,15 +59,10 @@ def add_p(doc, text="", bold_prefix=None, space_after=4):
     p.paragraph_format.space_after = Pt(space_after)
     if bold_prefix:
         r_pre = p.add_run(bold_prefix)
-        r_pre.bold = True
-        r_pre.font.name = 'Times New Roman'
-        r_pre.font.size = Pt(11)
-        r_pre.font.color.rgb = RGBColor(30, 41, 59)
+        set_run_font(r_pre, 'Times New Roman', 11, bold=True, color_rgb=RGBColor(30, 41, 59))
     if text:
         r_txt = p.add_run(text)
-        r_txt.font.name = 'Times New Roman'
-        r_txt.font.size = Pt(11)
-        r_txt.font.color.rgb = RGBColor(15, 23, 42)
+        set_run_font(r_txt, 'Times New Roman', 11, bold=False, color_rgb=RGBColor(15, 23, 42))
     return p
 
 def add_callout(doc, text, title="GHI CHÚ HỆ THỐNG:"):
@@ -75,14 +75,9 @@ def add_callout(doc, text, title="GHI CHÚ HỆ THỐNG:"):
     p.paragraph_format.line_spacing = 1.15
     p.paragraph_format.space_after = Pt(0)
     r_t = p.add_run(title + " ")
-    r_t.bold = True
-    r_t.font.name = 'Arial'
-    r_t.font.size = Pt(10)
-    r_t.font.color.rgb = RGBColor(2, 132, 199) # Sky 600
+    set_run_font(r_t, 'Times New Roman', 10, bold=True, color_rgb=RGBColor(2, 132, 199))
     r_b = p.add_run(text)
-    r_b.font.name = 'Times New Roman'
-    r_b.font.size = Pt(10.5)
-    r_b.font.color.rgb = RGBColor(30, 41, 59)
+    set_run_font(r_b, 'Times New Roman', 10.5, color_rgb=RGBColor(30, 41, 59))
     p_after = doc.add_paragraph()
     p_after.paragraph_format.space_after = Pt(4)
 
@@ -100,11 +95,7 @@ def add_image_evidence(doc, img_name, fig_num, caption, desc):
         p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p_cap.paragraph_format.space_after = Pt(6)
         r_cap = p_cap.add_run(f"Hình {fig_num}: {caption}")
-        r_cap.font.name = 'Arial'
-        r_cap.font.size = Pt(9.5)
-        r_cap.font.bold = True
-        r_cap.font.italic = True
-        r_cap.font.color.rgb = RGBColor(71, 85, 105) # Slate 600
+        set_run_font(r_cap, 'Times New Roman', 9.5, bold=True, italic=True, color_rgb=RGBColor(71, 85, 105))
     
     if desc:
         add_p(doc, desc, bold_prefix="Phân tích kỹ thuật & Đánh giá: ")
@@ -119,15 +110,21 @@ def add_code_block(doc, code_text):
     p.paragraph_format.line_spacing = 1.0
     p.paragraph_format.space_after = Pt(0)
     run = p.add_run(code_text.strip())
-    run.font.name = 'Consolas'
-    run.font.size = Pt(8.5)
-    run.font.color.rgb = RGBColor(226, 232, 240)
+    set_run_font(run, 'Consolas', 8.5, color_rgb=RGBColor(226, 232, 240))
     p_after = doc.add_paragraph()
     p_after.paragraph_format.space_after = Pt(4)
 
 def build_docx_report():
     print("[*] Đang xây dựng tài liệu Word: Bao-cao-De-11-CineEvent.docx...")
     doc = Document()
+    style = doc.styles['Normal']
+    style.font.name = 'Times New Roman'
+    style.font.size = Pt(11)
+    rFonts = style.element.rPr.get_or_add_rFonts()
+    rFonts.set(qn('w:ascii'), 'Times New Roman')
+    rFonts.set(qn('w:hAnsi'), 'Times New Roman')
+    rFonts.set(qn('w:cs'), 'Times New Roman')
+    rFonts.set(qn('w:eastAsia'), 'Times New Roman')
     
     # Page setup: Margins 1 inch (2.54 cm)
     for section in doc.sections:
@@ -142,10 +139,7 @@ def build_docx_report():
     p_inst = doc.add_paragraph()
     p_inst.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_inst = p_inst.add_run("[TÊN TRƯỜNG / CƠ SỞ ĐÀO TẠO]\n[TÊN KHOA / BỘ MÔN]")
-    r_inst.font.name = 'Arial'
-    r_inst.font.size = Pt(13)
-    r_inst.font.bold = True
-    r_inst.font.color.rgb = RGBColor(30, 41, 59)
+    set_run_font(r_inst, 'Times New Roman', 13, bold=True, color_rgb=RGBColor(30, 41, 59))
     
     p_sp1 = doc.add_paragraph()
     p_sp1.paragraph_format.space_after = Pt(36)
@@ -153,10 +147,7 @@ def build_docx_report():
     p_sub = doc.add_paragraph()
     p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_sub = p_sub.add_run("BÁO CÁO BÀI TẬP LỚN\nMÔN TRIỂN KHAI VÀ QUẢN TRỊ HỆ THỐNG PHẦN MỀM")
-    r_sub.font.name = 'Arial'
-    r_sub.font.size = Pt(13)
-    r_sub.font.bold = True
-    r_sub.font.color.rgb = RGBColor(2, 132, 199)
+    set_run_font(r_sub, 'Times New Roman', 13, bold=True, color_rgb=RGBColor(2, 132, 199))
     
     p_line = doc.add_paragraph()
     p_line.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -166,19 +157,12 @@ def build_docx_report():
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_title = p_title.add_run("ĐỀ TÀI 11:\nXÂY DỰNG HỆ THỐNG ĐẶT VÉ XEM PHIM / SỰ KIỆN\nVÀ TRIỂN KHAI HẠ TẦNG GIÁM SÁT TOÀN DIỆN")
-    r_title.font.name = 'Arial'
-    r_title.font.size = Pt(18)
-    r_title.font.bold = True
-    r_title.font.color.rgb = RGBColor(15, 23, 42)
+    set_run_font(r_title, 'Times New Roman', 18, bold=True, color_rgb=RGBColor(15, 23, 42))
     
     p_app = doc.add_paragraph()
     p_app.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_app = p_app.add_run("Dự án: CINEEVENT — HỆ THỐNG ĐẶT VÉ VÀ QUẢN TRỊ ĐA TẦNG")
-    r_app.font.name = 'Arial'
-    r_app.font.size = Pt(12)
-    r_app.font.bold = True
-    r_app.font.italic = True
-    r_app.font.color.rgb = RGBColor(71, 85, 105)
+    set_run_font(r_app, 'Times New Roman', 12, bold=True, italic=True, color_rgb=RGBColor(71, 85, 105))
     
     p_sp2 = doc.add_paragraph()
     p_sp2.paragraph_format.space_after = Pt(48)
@@ -201,15 +185,9 @@ def build_docx_report():
         p0 = c0.paragraphs[0]
         p1 = c1.paragraphs[0]
         r0 = p0.add_run(label)
-        r0.font.bold = True
-        r0.font.name = 'Times New Roman'
-        r0.font.size = Pt(11.5)
+        set_run_font(r0, 'Times New Roman', 11.5, bold=True)
         r1 = p1.add_run(val)
-        r1.font.name = 'Times New Roman'
-        r1.font.size = Pt(11.5)
-        if "[" in val:
-            r1.font.bold = True
-            r1.font.color.rgb = RGBColor(180, 83, 9)
+        set_run_font(r1, 'Times New Roman', 11.5, bold=("[" in val), color_rgb=RGBColor(180, 83, 9) if "[" in val else None)
     
     p_sp3 = doc.add_paragraph()
     p_sp3.paragraph_format.space_after = Pt(60)
@@ -217,10 +195,7 @@ def build_docx_report():
     p_foot = doc.add_paragraph()
     p_foot.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r_foot = p_foot.add_run("[ĐỊA ĐIỂM] — NĂM 2026")
-    r_foot.font.name = 'Arial'
-    r_foot.font.size = Pt(11)
-    r_foot.font.bold = True
-    r_foot.font.color.rgb = RGBColor(100, 116, 139)
+    set_run_font(r_foot, 'Times New Roman', 11, bold=True, color_rgb=RGBColor(100, 116, 139))
     
     doc.add_page_break()
     
@@ -292,14 +267,9 @@ def build_docx_report():
         p.paragraph_format.line_spacing = 1.05
         p.paragraph_format.space_after = Pt(2)
         r1 = p.add_run(title)
-        r1.font.name = 'Times New Roman'
-        r1.font.size = Pt(10.5)
-        if title.startswith("CHƯƠNG") or title.startswith("PHỤ LỤC"):
-            r1.font.bold = True
+        set_run_font(r1, 'Times New Roman', 10.5, bold=(title.startswith("CHƯƠNG") or title.startswith("PHỤ LỤC")))
         r2 = p.add_run(f"  {'.' * (60 - len(title))}  {pg}")
-        r2.font.name = 'Times New Roman'
-        r2.font.size = Pt(10)
-        r2.font.color.rgb = RGBColor(100, 116, 139)
+        set_run_font(r2, 'Times New Roman', 10, color_rgb=RGBColor(100, 116, 139))
         
     doc.add_page_break()
     
@@ -330,12 +300,9 @@ def build_docx_report():
         p.paragraph_format.line_spacing = 1.05
         p.paragraph_format.space_after = Pt(2)
         rf = p.add_run(f"{f_id}: ")
-        rf.font.bold = True
-        rf.font.name = 'Arial'
-        rf.font.size = Pt(10)
+        set_run_font(rf, 'Times New Roman', 10, bold=True)
         rt = p.add_run(f"{f_title} ({f_file})")
-        rt.font.name = 'Times New Roman'
-        rt.font.size = Pt(10.5)
+        set_run_font(rt, 'Times New Roman', 10.5)
 
     doc.add_page_break()
 
@@ -386,10 +353,7 @@ def build_docx_report():
         set_cell_margins(cell, 120, 120, 150, 150)
         p = cell.paragraphs[0]
         r = p.add_run(h)
-        r.font.bold = True
-        r.font.name = 'Arial'
-        r.font.size = Pt(9.5)
-        r.font.color.rgb = RGBColor(255, 255, 255)
+        set_run_font(r, 'Times New Roman', 9.5, bold=True, color_rgb=RGBColor(255, 255, 255))
         
     tech_data = [
         ("Frontend", "HTML5, CSS3, Bootstrap 5, Vanilla JS, Fetch API", "Giao diện Dark Glassmorphism, 100% tiếng Việt, responsive đa nền tảng, không phụ thuộc framework SPA nặng."),
@@ -405,10 +369,7 @@ def build_docx_report():
             set_cell_margins(cell, 100, 100, 120, 120)
             p = cell.paragraphs[0]
             r = p.add_run(text)
-            r.font.name = 'Times New Roman'
-            r.font.size = Pt(9.5)
-            if col_idx == 0:
-                r.font.bold = True
+            set_run_font(r, 'Times New Roman', 9.5, bold=(col_idx == 0))
 
     doc.add_page_break()
 
@@ -468,10 +429,7 @@ def build_docx_report():
         set_cell_margins(cell, 100, 100, 120, 120)
         p = cell.paragraphs[0]
         r = p.add_run(h)
-        r.font.bold = True
-        r.font.name = 'Arial'
-        r.font.size = Pt(9)
-        r.font.color.rgb = RGBColor(255, 255, 255)
+        set_run_font(r, 'Times New Roman', 9, bold=True, color_rgb=RGBColor(255, 255, 255))
         
     services_data = [
         ("nginx", "cineevent-nginx", "trienkhai_1-nginx:latest", "Reverse Proxy, SSL Termination (80, 443)"),
@@ -493,10 +451,8 @@ def build_docx_report():
             set_cell_margins(cell, 80, 80, 100, 100)
             p = cell.paragraphs[0]
             r = p.add_run(text)
-            r.font.name = 'Consolas' if col_idx in [1, 2] else 'Times New Roman'
-            r.font.size = Pt(8.5)
-            if col_idx == 0:
-                r.font.bold = True
+            font_to_use = 'Consolas' if col_idx in [1, 2] else 'Times New Roman'
+            set_run_font(r, font_to_use, 8.5, bold=(col_idx == 0))
 
     doc.add_page_break()
 
@@ -793,10 +749,7 @@ server {
         set_cell_margins(cell, 100, 100, 120, 120)
         p = cell.paragraphs[0]
         r = p.add_run(h)
-        r.font.bold = True
-        r.font.name = 'Arial'
-        r.font.size = Pt(9)
-        r.font.color.rgb = RGBColor(255, 255, 255)
+        set_run_font(r, 'Times New Roman', 9, bold=True, color_rgb=RGBColor(255, 255, 255))
         
     test_data = [
         ("TC-01", "Khởi động Docker Compose", "Thực thi docker compose up -d --build", "11/11 container Up, trạng thái Healthy [ĐẠT]"),
@@ -817,13 +770,7 @@ server {
             set_cell_margins(cell, 80, 80, 100, 100)
             p = cell.paragraphs[0]
             r = p.add_run(text)
-            r.font.name = 'Times New Roman'
-            r.font.size = Pt(8.5)
-            if col_idx == 0:
-                r.font.bold = True
-            if col_idx == 3:
-                r.font.bold = True
-                r.font.color.rgb = RGBColor(16, 185, 129) # Emerald 500
+            set_run_font(r, 'Times New Roman', 8.5, bold=(col_idx in [0, 3]), color_rgb=RGBColor(16, 185, 129) if col_idx == 3 else None)
 
     add_styled_heading(doc, "8.2. Kết quả nghiệm thu và đánh giá mức độ đáp ứng tiêu chí", level=2)
     add_p(doc, "Đối chiếu trực tiếp với thang điểm 10 của môn học:")
@@ -926,7 +873,7 @@ def build_html_and_pdf_report():
     padding: 0;
   }}
   h1, h2, h3, h4 {{
-    font-family: 'Arial', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     color: #0f172a;
     margin-top: 18px;
     margin-bottom: 6px;
@@ -1003,7 +950,7 @@ def build_html_and_pdf_report():
   table.data-table th {{
     background-color: #0f172a;
     color: #ffffff;
-    font-family: 'Arial', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
   }}
   table.data-table tr:nth-child(even) {{
     background-color: #f8fafc;
@@ -1021,7 +968,7 @@ def build_html_and_pdf_report():
     box-shadow: 0 2px 4px rgba(0,0,0,0.08);
   }}
   .img-caption {{
-    font-family: 'Arial', sans-serif;
+    font-family: 'Times New Roman', Times, serif;
     font-size: 9.5pt;
     font-weight: bold;
     font-style: italic;
