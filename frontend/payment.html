@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cổng Thanh Toán Giả Lập — CineEvent</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css?v=3">
+  <style>
+    .countdown-timer-box {
+      background: rgba(225, 29, 72, 0.15);
+      border: 1px solid rgba(225, 29, 72, 0.4);
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="/index.html">
+        <i class="bi bi-film text-danger fs-3"></i>
+        <span>Cine<span class="brand-badge">Event</span></span>
+      </a>
+
+      <button class="navbar-toggler border-0 text-white" type="button" data-bs-target="#mainNavbar" data-bs-toggle="collapse">
+        <i class="bi bi-list fs-2"></i>
+      </button>
+
+      <div class="collapse navbar-collapse" id="mainNavbar">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+          <li class="nav-item"><a class="nav-link" href="/index.html"><i class="bi bi-house-door me-1"></i> Trang Chủ</a></li>
+          <li class="nav-item"><a class="nav-link" href="/movies.html"><i class="bi bi-camera-reels me-1"></i> Phim Chiếu Rạp</a></li>
+          <li class="nav-item"><a class="nav-link" href="/events.html"><i class="bi bi-calendar-event me-1"></i> Sự Kiện & Lễ Hội</a></li>
+          <li class="nav-item"><a class="nav-link" href="/my-tickets.html"><i class="bi bi-ticket-perforated me-1"></i> Vé Của Tôi</a></li>
+        </ul>
+        <div id="navbarAuthSection" class="d-flex align-items-center"></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="container my-5">
+    <div id="paymentContent">
+      <div class="text-center py-5">
+        <div class="spinner-border text-danger" role="status"></div>
+        <div class="text-muted mt-2">Đang tải thông tin đơn đặt vé...</div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="mt-auto py-4 border-top border-secondary" style="background: #070a10;">
+    <div class="container text-center text-muted small">
+      CineEvent — Hệ Thống Đặt Vé Xem Phim & Sự Kiện | Sinh viên: [HỌ VÀ TÊN] - MSSV: [MSSV] - Lớp: [LỚP]
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/api.js?v=3"></script>
+  <script>
+    let currentBooking = null;
+    let timerInterval = null;
+    let appliedDiscount = 0;
+    let finalPayable = 0;
+
+    function startHoldCountdown(expiresAtStr) {
+      if (timerInterval) clearInterval(timerInterval);
+
+      const expiresTime = new Date(expiresAtStr).getTime();
+      const timerEl = document.getElementById('holdCountdownDisplay');
+      if (!timerEl) return;
+
+      function updateClock() {
+        const now = Date.now();
+        const diff = Math.max(0, Math.floor((expiresTime - now) / 1000));
+
+        if (diff <= 0) {
+          clearInterval(timerInterval);
+          timerEl.innerHTML = '<span class="text-danger fw-bold"><i class="bi bi-alarm-fill me-1"></i>ĐÃ HẾT HẠN GIỮ CHỖ (5 PHÚT)</span>';
+          document.querySelectorAll('.sim-action-btn').forEach(b => b.disabled = true);
+          const statusAlert = document.getElementById('paymentAlertBox');
+          if (statusAlert) {
+            statusAlert.className = 'alert alert-danger';
+            statusAlert.innerHTML = '<strong>Đơn đặt vé đã hết hạn!</strong> Ghế đã được tự động giải phóng. Vui lòng quay lại để chọn lại ghế.';
+            statusAlert.classList.remove('d-none');
+          }
+          return;
+        }
+
+        const minutes = Math.floor(diff / 60);
+        const seconds = diff % 60;
+        const formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        timerEl.innerHTML = `<span class="text-warning fw-bold"><i class="bi bi-clock-history me-1"></i>Thời gian giữ chỗ còn lại: <strong class="fs-5 text-white">${formatted}</strong></span>`;
+      }
+
+      updateClock();
+      timerInterval = setInterval(updateClock, 1000);
+    }
+
+    async function applyVoucherCode() {
+      const codeInput = document.getElementById('voucherInput');
+      const code = codeInput ? codeInput.value.trim().toUpperCase() : '';
+      if (!code) {
+        showToast('Vui lòng nhập mã giảm giá!', 'warning');
+        return;
+      }
+
+      const btn = document.getElementById('btnApplyVoucher');
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await apiCall('/bookings/apply-voucher', {
+          method: 'POST',
+          body: {
+            code,
+            total_amount: currentBooking.total_amount
+          }
+        });
+
+        appliedDiscount = res.data.discountAmount;
+        finalPayable = res.data.finalAmount;
+
+        const discountRow = document.getElementById('voucherDiscountRow');
+        const discountVal = document.getElementById('voucherDiscountVal');
+        const finalVal = document.getElementById('finalPayableAmount');
+        const voucherMsg = document.getElementById('voucherSuccessMsg');
+
+        if (discountRow) discountRow.classList.remove('d-none');
+        if (discountVal) discountVal.textContent = `-${formatVND(appliedDiscount)}`;
+        if (finalVal) finalVal.textContent = formatVND(finalPayable);
+        if (voucherMsg) {
+          voucherMsg.className = 'text-success small mt-1';
+          voucherMsg.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i>${res.data.message}`;
+        }
+
+        showToast(res.data.message, 'success');
+      } catch (err) {
+        showToast(err.message, 'danger');
+        const voucherMsg = document.getElementById('voucherSuccessMsg');
+        if (voucherMsg) {
+          voucherMsg.className = 'text-danger small mt-1';
+          voucherMsg.innerHTML = `<i class="bi bi-x-circle-fill me-1"></i>${err.message}`;
+        }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function triggerSimulation(action) {
+      if (!currentBooking) return;
+
+      const methodEl = document.querySelector('input[name="paymentMethod"]:checked');
+      const paymentMethod = methodEl ? methodEl.value : 'SIMULATED_VNPAY';
+
+      // Disable buttons
+      document.querySelectorAll('.sim-action-btn').forEach(b => b.disabled = true);
+
+      try {
+        const res = await apiCall('/payments/simulate', {
+          method: 'POST',
+          body: {
+            booking_id: currentBooking.id,
+            action,
+            payment_method: paymentMethod
+          }
+        });
+
+        if (action === 'SUCCESS') {
+          showToast(res.message, 'success');
+          if (timerInterval) clearInterval(timerInterval);
+          setTimeout(() => {
+            window.location.href = `/ticket-result.html?code=${currentBooking.booking_code}`;
+          }, 600);
+        } else if (action === 'FAILED') {
+          showToast(res.message, 'danger');
+          const statusAlert = document.getElementById('paymentAlertBox');
+          if (statusAlert) {
+            statusAlert.className = 'alert alert-danger';
+            statusAlert.innerHTML = `<strong><i class="bi bi-x-circle-fill me-2"></i>Thanh toán thất bại!</strong> ${res.message}. Mã giao dịch mô phỏng: <code>${res.transaction_code}</code>. Bạn có thể chọn cổng khác để thử lại.`;
+            statusAlert.classList.remove('d-none');
+          }
+          document.querySelectorAll('.sim-action-btn').forEach(b => b.disabled = false);
+        } else if (action === 'CANCELLED') {
+          showToast(res.message, 'warning');
+          if (timerInterval) clearInterval(timerInterval);
+          const statusAlert = document.getElementById('paymentAlertBox');
+          if (statusAlert) {
+            statusAlert.className = 'alert alert-warning';
+            statusAlert.innerHTML = `<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>Đã hủy đơn hàng!</strong> ${res.message}. Ghế đã được giải phóng trở lại hệ thống.`;
+            statusAlert.classList.remove('d-none');
+          }
+          setTimeout(() => {
+            window.location.href = '/index.html';
+          }, 1500);
+        }
+      } catch (err) {
+        showToast(err.message, 'danger');
+        document.querySelectorAll('.sim-action-btn').forEach(b => b.disabled = false);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const bookingCode = urlParams.get('code');
+
+      if (!bookingCode) {
+        document.getElementById('paymentContent').innerHTML = `
+          <div class="alert alert-warning glass-card">
+            <h5>Không tìm thấy mã đơn đặt vé!</h5>
+            <p>Vui lòng quay lại trang chủ hoặc kiểm tra lịch sử đặt vé.</p>
+            <a href="/index.html" class="btn btn-primary-cine btn-sm">Về Trang Chủ</a>
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        const res = await apiCall(`/bookings/${bookingCode}`);
+        currentBooking = res.data;
+        appliedDiscount = Number(currentBooking.discount_amount) || 0;
+        finalPayable = Number(currentBooking.final_amount) || Number(currentBooking.total_amount);
+
+        // If already confirmed, redirect to ticket result
+        if (currentBooking.status === 'confirmed') {
+          window.location.href = `/ticket-result.html?code=${currentBooking.booking_code}`;
+          return;
+        }
+
+        const isMovie = currentBooking.booking_type === 'movie';
+        const title = isMovie ? currentBooking.movie_title : currentBooking.event_title;
+        const details = isMovie 
+          ? `${currentBooking.cinema_name} &bull; ${currentBooking.room_name} &bull; ${formatDateTime(currentBooking.showtime_start)}`
+          : `${formatDateTime(currentBooking.showtime_start || currentBooking.created_at)}`;
+
+        // Render seats
+        const itemsHtml = (currentBooking.items || []).map(it => {
+          const label = isMovie ? `Ghế ${it.seat_row}${it.seat_number} (${it.seat_type})` : `${it.ticket_type_name} (x${it.quantity})`;
+          return `
+            <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary small">
+              <span class="text-white">${label}</span>
+              <strong class="text-warning">${formatVND(it.subtotal)}</strong>
+            </div>
+          `;
+        }).join('');
+
+        // Render F&B items if any
+        let fnbHtml = '';
+        if (currentBooking.fnb_items && currentBooking.fnb_items.length > 0) {
+          fnbHtml = `
+            <div class="my-3">
+              <h6 class="text-muted small fw-bold text-uppercase mb-2"><i class="bi bi-cup-straw text-danger me-1"></i>Bắp nước & Combo đã chọn:</h6>
+              ${currentBooking.fnb_items.map(f => `
+                <div class="d-flex justify-content-between align-items-center py-1 border-bottom border-secondary small">
+                  <span class="text-white">${f.fnb_name} <strong class="text-warning">x${f.quantity}</strong></span>
+                  <span class="text-warning">${formatVND(f.subtotal)}</span>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        document.getElementById('paymentContent').innerHTML = `
+          <!-- Simulation Disclaimer Banner -->
+          <div class="simulation-banner mb-3 d-flex align-items-center gap-3">
+            <i class="bi bi-exclamation-triangle-fill fs-3 text-warning"></i>
+            <div>
+              <strong class="d-block text-white">CỔNG THANH TOÁN MÔ PHỎNG GIẢ LẬP — HỌC TẬP & KIỂM THỬ</strong>
+              <span class="small">Hệ thống KHÔNG tích hợp trừ tiền thật. Vui lòng sử dụng các nút tương tác bên dưới để kiểm thử các tình huống: Thành công, Thất bại hoặc Hủy đơn hàng.</span>
+            </div>
+          </div>
+
+          <!-- Hold Countdown Timer -->
+          <div class="countdown-timer-box p-3 mb-4 text-center">
+            <div id="holdCountdownDisplay"></div>
+          </div>
+
+          <!-- Dynamic Alert Box for test feedback -->
+          <div id="paymentAlertBox" class="alert d-none mb-4"></div>
+
+          <div class="row g-4">
+            <!-- Left: Order Details & Payment Method -->
+            <div class="col-lg-7">
+              <div class="glass-card p-4 mb-4">
+                <h5 class="fw-bold text-white mb-3 border-bottom border-secondary pb-2">
+                  <i class="bi bi-receipt-cutoff text-danger me-2"></i>Chi Tiết Đơn Đặt Vé
+                </h5>
+                <div class="mb-3">
+                  <span class="badge bg-secondary mb-1">${isMovie ? 'Vé Xem Phim' : 'Vé Sự Kiện'}</span>
+                  <h4 class="fw-bold text-white mb-1">${title}</h4>
+                  <div class="text-muted small">${details}</div>
+                  <div class="text-muted small mt-1">Mã đơn: <strong class="text-white font-monospace">${currentBooking.booking_code}</strong></div>
+                </div>
+
+                <div class="my-3">
+                  <h6 class="text-muted small fw-bold text-uppercase mb-2">Danh sách vé đã chọn:</h6>
+                  ${itemsHtml}
+                </div>
+
+                ${fnbHtml}
+
+                <!-- Voucher Code Section -->
+                <div class="pt-3 border-top border-secondary my-3">
+                  <label class="form-label text-muted small fw-bold"><i class="bi bi-tag-fill text-warning me-1"></i>Mã Giảm Giá / Khuyến Mãi:</label>
+                  <div class="input-group mb-1">
+                    <input type="text" id="voucherInput" class="form-control form-control-sm bg-dark text-white border-secondary text-uppercase" placeholder="Nhập mã voucher (VD: CINE20, WELCOME10, VIP50K)...">
+                    <button class="btn btn-outline-warning btn-sm" id="btnApplyVoucher" type="button" onclick="applyVoucherCode()">
+                      <i class="bi bi-check-lg me-1"></i>Áp Dụng
+                    </button>
+                  </div>
+                  <div id="voucherSuccessMsg"></div>
+                  <div class="text-muted small mt-1">Gợi ý mã dùng thử: <span class="badge bg-dark border border-secondary text-warning cursor-pointer me-1" onclick="document.getElementById('voucherInput').value='CINE20'">CINE20</span> (Giảm 20%), <span class="badge bg-dark border border-secondary text-info cursor-pointer" onclick="document.getElementById('voucherInput').value='WELCOME10'">WELCOME10</span> (Giảm 10%)</div>
+                </div>
+
+                <!-- Price Summary -->
+                <div class="pt-3 border-top border-secondary">
+                  <div class="d-flex justify-content-between align-items-center mb-1 small text-muted">
+                    <span>Tạm tính (Vé + Bắp nước):</span>
+                    <span>${formatVND(currentBooking.total_amount)}</span>
+                  </div>
+                  <div id="voucherDiscountRow" class="d-flex justify-content-between align-items-center mb-1 small text-success ${appliedDiscount > 0 ? '' : 'd-none'}">
+                    <span>Giảm giá khuyến mãi:</span>
+                    <strong id="voucherDiscountVal">-${formatVND(appliedDiscount)}</strong>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center pt-2 border-top border-secondary">
+                    <span class="text-white fw-bold">Tổng thanh toán:</span>
+                    <strong class="text-warning fs-3" id="finalPayableAmount">${formatVND(finalPayable)}</strong>
+                  </div>
+                  <div class="text-info small mt-2">
+                    <i class="bi bi-star-fill text-warning me-1"></i>Tích lũy: <strong>+${Math.floor(finalPayable / 1000)}</strong> điểm hội viên khi thanh toán thành công
+                  </div>
+                </div>
+              </div>
+
+              <!-- Payment Method Selector -->
+              <div class="glass-card p-4">
+                <h5 class="fw-bold text-white mb-3 border-bottom border-secondary pb-2">
+                  <i class="bi bi-wallet2 text-warning me-2"></i>Chọn Cổng Thanh Toán Mô Phỏng
+                </h5>
+
+                <div class="d-flex flex-column gap-3">
+                  <label class="p-3 rounded border border-secondary d-flex align-items-center gap-3 cursor-pointer" style="background:#131c2e;">
+                    <input type="radio" name="paymentMethod" value="SIMULATED_VNPAY" checked class="form-check-input mt-0">
+                    <div>
+                      <strong class="text-white d-block">VNPAY Sandbox (Mô phỏng)</strong>
+                      <span class="text-muted small">Cổng thanh toán QR Code / Thẻ ATM nội địa</span>
+                    </div>
+                  </label>
+
+                  <label class="p-3 rounded border border-secondary d-flex align-items-center gap-3 cursor-pointer" style="background:#131c2e;">
+                    <input type="radio" name="paymentMethod" value="SIMULATED_MOMO" class="form-check-input mt-0">
+                    <div>
+                      <strong class="text-white d-block">Ví MoMo Sandbox (Mô phỏng)</strong>
+                      <span class="text-muted small">Ví điện tử MoMo thanh toán một chạm</span>
+                    </div>
+                  </label>
+
+                  <label class="p-3 rounded border border-secondary d-flex align-items-center gap-3 cursor-pointer" style="background:#131c2e;">
+                    <input type="radio" name="paymentMethod" value="SIMULATED_BANKING" class="form-check-input mt-0">
+                    <div>
+                      <strong class="text-white d-block">Chuyển Khoản Ngân Hàng (Mô phỏng)</strong>
+                      <span class="text-muted small">Quét mã VietQR chuyển khoản tự động</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Interactive Simulation Actions -->
+            <div class="col-lg-5">
+              <div class="glass-card p-4 sticky-top" style="top: 100px;">
+                <h5 class="fw-bold text-white mb-3 border-bottom border-secondary pb-2 text-center">
+                  <i class="bi bi-sliders text-info me-2"></i>Bảng Điều Khiển Giả Lập
+                </h5>
+                <p class="text-muted small text-center mb-4">
+                  Chọn hành động bên dưới để backend thực hiện transaction và kiểm thử các luồng nghiệp vụ:
+                </p>
+
+                <div class="d-grid gap-3 mb-4">
+                  <!-- Action 1: Success -->
+                  <button type="button" class="btn btn-success sim-action-btn py-3 fw-bold shadow-sm" onclick="triggerSimulation('SUCCESS')">
+                    <i class="bi bi-check-circle-fill me-2 fs-5 align-middle"></i> 
+                    Xác Nhận Thanh Toán Thành Công
+                  </button>
+
+                  <!-- Action 2: Failure -->
+                  <button type="button" class="btn btn-danger sim-action-btn py-2 fw-semibold" onclick="triggerSimulation('FAILED')">
+                    <i class="bi bi-x-circle-fill me-2 align-middle"></i> 
+                    Mô Phỏng Thanh Toán Thất Bại
+                  </button>
+
+                  <!-- Action 3: Cancel -->
+                  <button type="button" class="btn btn-outline-secondary sim-action-btn py-2 text-white" onclick="triggerSimulation('CANCELLED')">
+                    <i class="bi bi-arrow-left-circle me-2 align-middle"></i> 
+                    Hủy Giao Dịch Đặt Vé (Giải phóng ghế)
+                  </button>
+                </div>
+
+                <div class="p-3 rounded bg-dark border border-secondary small text-muted">
+                  <div><strong class="text-light">Quy trình Backend:</strong></div>
+                  <div>1. Xác thực giao dịch và thời gian giữ chỗ (5 phút).</div>
+                  <div>2. Ghi nhận giao dịch thanh toán trong bảng <code>payments</code>.</div>
+                  <div>3. Cập nhật trạng thái <code>bookings.status = confirmed</code>.</div>
+                  <div>4. Tự động sinh vé điện tử kèm mã QR trong bảng <code>tickets</code>.</div>
+                  <div>5. Tích lũy điểm thưởng hội viên tương ứng vào tài khoản.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Start 5-minute countdown clock
+        startHoldCountdown(currentBooking.expires_at);
+
+      } catch (err) {
+        document.getElementById('paymentContent').innerHTML = `
+          <div class="alert alert-danger glass-card">
+            <h5>Lỗi:</h5>
+            <p>${err.message}</p>
+            <a href="/index.html" class="btn btn-outline-cine btn-sm">Về Trang Chủ</a>
+          </div>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
