@@ -65,7 +65,16 @@ let frontendPath = path.join(__dirname, '../frontend');
 if (!fs.existsSync(frontendPath)) {
   frontendPath = path.join(__dirname, '../../frontend');
 }
-app.use(express.static(frontendPath));
+app.use(express.static(frontendPath, {
+  setHeaders: (res, filePath) => {
+    if (/\.(html|css|js|json)$/i.test(filePath)) {
+      const type = res.getHeader('Content-Type');
+      if (type && !type.includes('charset')) {
+        res.setHeader('Content-Type', `${type}; charset=utf-8`);
+      }
+    }
+  }
+}));
 
 // Fallback for SPA/HTML navigation if file not found
 app.get('*', (req, res, next) => {
