@@ -116,9 +116,26 @@ cp .env.example .env
 *(Nếu sử dụng PowerShell trên Windows: `Copy-Item .env.example .env`)*
 
 ### 4.2. Khởi chạy toàn bộ hệ thống bằng một câu lệnh
+
+**Cách 1: Sử dụng lệnh Docker Compose trực tiếp (Mọi hệ điều hành)**
 ```bash
 docker compose up -d --build
 ```
+
+**Cách 2: Sử dụng Script 1 chạm tự động (Tự tạo .env, build, kiểm tra & mở web)**
+- **Windows PowerShell:**
+  ```powershell
+  .\start.ps1
+  ```
+- **Windows Command Prompt (CMD):**
+  ```cmd
+  start.bat
+  ```
+- **Linux / macOS / Git Bash:**
+  ```bash
+  chmod +x start.sh && ./start.sh
+  ```
+
 > **Cơ chế tự động hóa:**
 > - Nginx tự động sinh khóa bí mật và chứng chỉ SSL tự ký nếu chưa có trong thư mục `certs/`.
 > - MySQL tự động nạp cấu trúc 17 bảng (`schema.sql`), nạp dữ liệu mẫu (`seed.sql`) và phân quyền tối thiểu (`permissions.sql`).
