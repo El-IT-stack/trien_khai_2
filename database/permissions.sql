@@ -3,6 +3,9 @@
 -- Thiết lập tài khoản ứng dụng và exporter theo nguyên tắc đặc quyền tối thiểu
 -- ==============================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 -- 1. Create Application User with access to cineevent_db (compatible with phpMyAdmin)
 CREATE USER IF NOT EXISTS 'cineevent_user'@'%' IDENTIFIED WITH mysql_native_password BY 'CineEvent_UserSecurePass_2026!';
 ALTER USER 'cineevent_user'@'%' IDENTIFIED WITH mysql_native_password BY 'CineEvent_UserSecurePass_2026!';

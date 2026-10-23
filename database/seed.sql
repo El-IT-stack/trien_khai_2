@@ -3,6 +3,9 @@
 -- Dữ liệu khởi tạo hệ thống đặt vé xem phim và sự kiện
 -- ==============================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 USE cineevent_db;
 
 -- 1. Insert Roles

@@ -71,6 +71,145 @@ async function syncCurrentUser() {
   }
 }
 
+// Bộ lọc tự động sửa lỗi bảng mã font chữ tiếng Việt (Mojibake UTF-8)
+const VIETNAMESE_MOJIBAKE_MAP = {
+  // Cụm từ danh mục & phim phổ biến
+  'HÃ nh Ä\u00a0á»™ng & PhiÃªu LÆ°u': 'Hành Động & Phiêu Lưu',
+  'HÃ nh Ä á»™ng & PhiÃªu LÆ°u': 'Hành Động & Phiêu Lưu',
+  'HÃ nh Ä á»™ng & PhiÃªu LÆ°u': 'Hành Động & Phiêu Lưu',
+  'Khoa Há»\u008dc Viá»…n TÆ°á»Ÿng': 'Khoa Học Viễn Tưởng',
+  'Khoa Há» c Viá»…n TÆ°á»Ÿng': 'Khoa Học Viễn Tưởng',
+  'TÃ¢m LÃ½ & TÃ¬nh Cáº£m': 'Tâm Lý & Tình Cảm',
+  'Hoáº¡t HÃ¬nh & Gia Ä\u00a0Ã¬nh': 'Hoạt Hình & Gia Đình',
+  'Hoáº¡t HÃ¬nh & Gia Ä Ã¬nh': 'Hoạt Hình & Gia Đình',
+  'Hoáº¡t HÃ¬nh & Gia Ä Ã¬nh': 'Hoạt Hình & Gia Đình',
+  'Kinh Dá»‹ & Giáº·t GÃ¢n': 'Kinh Dị & Giật Gân',
+  'HÃ i HÆ°á»›c & Ä\u00a0á» i Sá»‘ng': 'Hài Hước & Đời Sống',
+  'HÃ i HÆ°á»›c & Ä á» i Sá»‘ng': 'Hài Hước & Đời Sống',
+
+  'Godzilla x Kong: Ä\u00a0áº¿ Cháº¿ Mới': 'Godzilla x Kong: Đế Chế Mới',
+  'Godzilla x Kong: Ä áº¿ Cháº¿ Mới': 'Godzilla x Kong: Đế Chế Mới',
+  'Godzilla x Kong: Ä\u00a0áº¿ Cháº¿': 'Godzilla x Kong: Đế Chế Mới',
+  'Godzilla x Kong: Ä áº¿ Cháº¿': 'Godzilla x Kong: Đế Chế Mới',
+  'Dune: HÃ nh Tinh CÃ¡t': 'Dune: Hành Tinh Cát',
+  'Mai â€“ Phim TÃ¢m LÃ½': 'Mai — Bộ Phim Tâm Lý Đỉnh Cao',
+  'Mai â€” Phim TÃ¢m LÃ½': 'Mai — Bộ Phim Tâm Lý Đỉnh Cao',
+  'Mai â€“ Phim': 'Mai — Bộ Phim',
+  'Láº­t Máº·t 7': 'Lật Mặt 7: Một Điều Ước',
+  'Ä\u00a0áº¡i Nháº¡c Há»™i Monsoon': 'Đại Nhạc Hội Monsoon',
+  'Ä áº¡i Nháº¡c Há»™i Monsoon': 'Đại Nhạc Hội Monsoon',
+  'H\u00f2a Nh\u1ea1c Giao H\u01b0\u1edfng': 'Hòa Nhạc Giao Hưởng',
+  'GameVerse Esports': 'Vietnam GameVerse Esports Championship 2026',
+
+  // Ký tự dấu câu
+  'â€“': '—',
+  'â€”': '—',
+  'â€¦': '…',
+  'â€œ': '“',
+  'â€': '”',
+
+  // Phụ âm Đ
+  'Ä\u00a0': 'Đ',
+  'Ä ': 'Đ',
+  'Ä ': 'Đ',
+  'Ä‘': 'đ',
+
+  // Nguyên âm tiếng Việt ghép byte
+  'HÃ nh': 'Hành',
+  'HÃ ': 'Hà',
+  'HÃ¡': 'Há',
+  'Ã\u00a0': 'à',
+  'Ã ': 'à',
+  'Ã¡': 'á',
+  'Ã¢': 'â',
+  'Ã£': 'ã',
+  'Ã¨': 'è',
+  'Ã©': 'é',
+  'Ãª': 'ê',
+  'Ã¬': 'ì',
+  'Ã­': 'í',
+  'Ã²': 'ò',
+  'Ã³': 'ó',
+  'Ã´': 'ô',
+  'Ãµ': 'õ',
+  'Ã¹': 'ù',
+  'Ãº': 'ú',
+  'Ã½': 'ý',
+  'á»™': 'ộ',
+  'áº¿': 'ế',
+  'á»‹': 'ị',
+  'á»¥': 'ụ',
+  'á»Ÿ': 'ở',
+  'á»£': 'ợ',
+  'á»¡': 'ỡ',
+  'áº¡': 'ạ',
+  'áº£': 'ả',
+  'áº¥': 'ấ',
+  'áº§': 'ầ',
+  'áº©': 'ẩ',
+  'áº«': 'ẫ',
+  'áº­': 'ậ',
+  'áº¯': 'ắ',
+  'áº±': 'ằ',
+  'áº³': 'ẳ',
+  'áºµ': 'ẵ',
+  'áº·': 'ặ',
+  'áº¹': 'ẹ',
+  'áº»': 'ẻ',
+  'áº½': 'ẽ',
+  'á» ': 'ề',
+  'á» ': 'ề',
+  'á»ƒ': 'ể',
+  'á»…': 'ễ',
+  'á»‡': 'ệ',
+  'á»‰': 'ỉ',
+  'á»\u008d': 'ọ',
+  'á» ': 'ọ',
+  'á» ': 'ỏ',
+  'á»‘': 'ố',
+  'á»“': 'ồ',
+  'á»•': 'ổ',
+  'á»—': 'ỗ',
+  'á» ': 'ờ',
+  'á» ': 'ờ',
+  'á»›': 'ớ',
+  'á»©': 'ứ',
+  'á»«': 'ừ',
+  'á»­': 'ử',
+  'á»¯': 'ữ',
+  'á»±': 'ự',
+  'á»³': 'ỳ',
+  'á»µ': 'ỵ',
+  'á»·': 'ỷ',
+  'á»¹': 'ỹ',
+  'Æ°': 'ư',
+  'Æ¡': 'ơ'
+};
+
+function cleanVietnameseEncoding(obj) {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') {
+    let s = obj;
+    for (const [k, v] of Object.entries(VIETNAMESE_MOJIBAKE_MAP)) {
+      if (s.includes(k)) {
+        s = s.split(k).join(v);
+      }
+    }
+    return s;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanVietnameseEncoding);
+  }
+  if (typeof obj === 'object') {
+    const res = {};
+    for (const [k, v] of Object.entries(obj)) {
+      res[k] = cleanVietnameseEncoding(v);
+    }
+    return res;
+  }
+  return obj;
+}
+
 // Universal API fetch helper
 async function apiCall(endpoint, options = {}) {
   const headers = {
@@ -95,7 +234,8 @@ async function apiCall(endpoint, options = {}) {
 
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, config);
-    const data = await res.json();
+    const rawData = await res.json();
+    const data = cleanVietnameseEncoding(rawData);
 
     if (!res.ok) {
       if (res.status === 401) {
@@ -246,9 +386,6 @@ function updateNavbarAuth() {
       </button>
     `;
   }
-
-  // Update role switcher bar active state
-  updateRoleSwitcherBarState();
 }
 
 function handleLogout() {
@@ -665,61 +802,8 @@ async function handleRegisterForm(e) {
   }
 }
 
-// Render Top Role Demo Switcher Bar on every page
-function renderRoleSwitcherBar() {
-  if (document.getElementById('roleSwitcherBar')) return;
-
-  const barHtml = `
-    <div id="roleSwitcherBar" class="no-print py-1 px-3 border-bottom border-secondary d-flex align-items-center justify-content-between flex-wrap" style="background: #070a12; font-size: 0.8rem; z-index: 1060; position: relative;">
-      <div class="d-flex align-items-center gap-2 py-1">
-        <span class="badge bg-secondary text-uppercase" style="letter-spacing: 0.5px; font-size: 0.7rem;"><i class="bi bi-people-fill me-1"></i>Demo Phân Quyền (1-Click)</span>
-        <span class="text-muted d-none d-md-inline" style="font-size: 0.75rem;">Chuyển đổi giao diện chức năng theo 4 vai trò:</span>
-      </div>
-      <div class="d-flex align-items-center gap-1 flex-wrap py-1">
-        <button type="button" class="btn btn-xs py-0 px-2 btn-outline-danger" id="btnRoleAdmin" onclick="quickSwitchRole('admin')" title="Đăng nhập Admin (admin@cineevent.vn)">
-          <i class="bi bi-shield-lock-fill me-1"></i>Admin
-        </button>
-        <button type="button" class="btn btn-xs py-0 px-2 btn-outline-warning" id="btnRoleManager" onclick="quickSwitchRole('manager')" title="Đăng nhập Quản lý (manager@cineevent.vn)">
-          <i class="bi bi-briefcase-fill me-1"></i>Quản Lý
-        </button>
-        <button type="button" class="btn btn-xs py-0 px-2 btn-outline-info" id="btnRoleStaff" onclick="quickSwitchRole('staff')" title="Đăng nhập Nhân viên (staff@cineevent.vn)">
-          <i class="bi bi-person-badge-fill me-1"></i>Nhân Viên
-        </button>
-        <button type="button" class="btn btn-xs py-0 px-2 btn-outline-light" id="btnRoleCustomer" onclick="quickSwitchRole('customer')" title="Đăng nhập Khách hàng (customer@gmail.com)">
-          <i class="bi bi-person-heart me-1"></i>Khách Hàng
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.insertAdjacentHTML('afterbegin', barHtml);
-}
-
-function updateRoleSwitcherBarState() {
-  const user = getCurrentUser();
-  const currentRole = user ? user.role_name : null;
-
-  ['admin', 'manager', 'staff', 'customer'].forEach(r => {
-    const btn = document.getElementById(`btnRole${r.charAt(0).toUpperCase() + r.slice(1)}`);
-    if (!btn) return;
-    if (currentRole === r) {
-      btn.classList.add('active', 'fw-bold', 'shadow-sm');
-      if (r === 'admin') btn.className = 'btn btn-xs py-0 px-2 btn-danger active fw-bold';
-      else if (r === 'manager') btn.className = 'btn btn-xs py-0 px-2 btn-warning active fw-bold text-dark';
-      else if (r === 'staff') btn.className = 'btn btn-xs py-0 px-2 btn-info active fw-bold text-dark';
-      else if (r === 'customer') btn.className = 'btn btn-xs py-0 px-2 btn-light active fw-bold';
-    } else {
-      if (r === 'admin') btn.className = 'btn btn-xs py-0 px-2 btn-outline-danger';
-      else if (r === 'manager') btn.className = 'btn btn-xs py-0 px-2 btn-outline-warning';
-      else if (r === 'staff') btn.className = 'btn btn-xs py-0 px-2 btn-outline-info';
-      else if (r === 'customer') btn.className = 'btn btn-xs py-0 px-2 btn-outline-light';
-    }
-  });
-}
-
 // Initialize on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-  renderRoleSwitcherBar();
   renderAuthModals();
   updateNavbarAuth();
   syncCurrentUser();

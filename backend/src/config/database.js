@@ -29,6 +29,11 @@ const initDatabaseWithRetry = async (maxRetries = 20, delayMs = 3000) => {
       connection.release();
 
       logger.info('Kết nối MySQL thành công và sẵn sàng phục vụ!');
+      
+      // Tự động kiểm tra và sửa lỗi font chữ tiếng Việt cho các bảng dữ liệu
+      const { autoRepairDatabaseEncoding } = require('./repairDatabase');
+      await autoRepairDatabaseEncoding(pool);
+
       return pool;
     } catch (err) {
       logger.warn(`Chưa thể kết nối tới MySQL (lần ${attempt}/${maxRetries}): ${err.message}. Thử lại sau ${delayMs / 1000}s...`);

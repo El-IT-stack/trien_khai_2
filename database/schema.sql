@@ -3,6 +3,9 @@
 -- Hệ thống đặt vé xem phim và sự kiện
 -- ==============================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS cineevent_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE cineevent_db;
 

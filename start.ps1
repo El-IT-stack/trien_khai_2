@@ -2,6 +2,10 @@
 # KHOI DONG HE THONG CINEEVENT (POWERSHELL)
 # ========================================================
 
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host " KHOI DONG HE THONG CINEEVENT (DOCKER COMPOSE)" -ForegroundColor Green
 Write-Host "========================================================" -ForegroundColor Cyan

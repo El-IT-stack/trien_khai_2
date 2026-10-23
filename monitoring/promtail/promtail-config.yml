@@ -1,31 +1,55 @@
 # ==============================================================================
-# PROMTAIL LOG AGENT CONFIGURATION
+# CẤU HÌNH AGENT THU THẬP VÀ ĐẨY NHẬT KÝ PROMTAIL (PROMTAIL CONFIGURATION)
+# Promtail đóng vai trò như 'người vận chuyển' (shipper), liên tục theo dõi các
+# file log trên đĩa cứng, gắn thêm nhãn (labels) và đẩy (push) log về máy chủ Loki.
 # ==============================================================================
 
+# Cấu hình mạng máy chủ nội bộ của tiến trình Promtail
 server:
+  # Cổng HTTP nội bộ để kiểm tra tình trạng (health check) và cung cấp chỉ số hoạt động của Promtail
   http_listen_port: 9080
+  # Đặt cổng gRPC bằng 0 để vô hiệu hóa lắng nghe kết nối gRPC đến Promtail
   grpc_listen_port: 0
 
+# Cấu hình lưu trữ vị trí con trỏ đọc log (Positions tracker)
 positions:
+  # Đường dẫn file lưu trữ vị trí byte/offset cuối cùng đã đọc trong từng file log.
+  # Nhờ file này, khi container Promtail khởi động lại, nó sẽ tiếp tục đọc tiếp mà không bị trùng lặp log cũ.
   filename: /tmp/positions.yaml
 
+# Danh sách máy chủ nhận dữ liệu log (Loki endpoints)
 clients:
+  # Địa chỉ URL endpoint của Loki để tiếp nhận luồng dữ liệu log được đẩy lên thông qua giao thức HTTP
   - url: http://loki:3100/loki/api/v1/push
 
+# Danh sách các tác vụ quét và thu thập nhật ký (Scrape Configurations)
 scrape_configs:
-  # 1. CineEvent Express.js Application Logs
+  # ----------------------------------------------------------------------------
+  # 1. Thu thập nhật ký từ ứng dụng Backend CineEvent (Express.js)
+  # Thu thập các log ghi nhận hoạt động: đăng nhập, tạo vé, lỗi API, trace luồng xử lý...
+  # ----------------------------------------------------------------------------
   - job_name: cineevent-app
     static_configs:
+      # Định danh máy chủ nguồn tạo ra log (ở đây là local bên trong container)
       - targets:
           - localhost
+        # Các nhãn (labels) gắn vào từng dòng log giúp phân loại và lọc nhanh trên Grafana LogQL
         labels:
+          # Phân loại nhóm công việc
           job: app
+          # Tên dịch vụ
           service: app
+          # Tên ứng dụng cụ thể
           app_name: cineevent-app
+          # Môi trường chạy hệ thống
           environment: production
+          # Mẫu đường dẫn tìm kiếm tất cả các file có đuôi .log trong thư mục log ứng dụng
           __path__: /var/log/cineevent/*.log
 
-  # 2. Nginx Access Logs
+  # ----------------------------------------------------------------------------
+  # 2. Thu thập nhật ký truy cập của Web Server Nginx (Nginx Access Logs)
+  # Chứa thông tin: IP người dùng, thời gian truy cập, mã HTTP status, User-Agent, URI...
+  # ----------------------------------------------------------------------------
   - job_name: nginx-access
     static_configs:
       - targets:
@@ -33,11 +57,16 @@ scrape_configs:
         labels:
           job: nginx
           service: nginx
+          # Phân loại loại log: 'access' (truy cập)
           log_type: access
           environment: production
+          # Đường dẫn chính xác đến file access.log của Nginx được mount từ volume
           __path__: /var/log/nginx/access.log
 
-  # 3. Nginx Error Logs
+  # ----------------------------------------------------------------------------
+  # 3. Thu thập nhật ký báo lỗi của Web Server Nginx (Nginx Error Logs)
+  # Chứa thông tin: Lỗi kết nối upstream backend, lỗi SSL, cảnh báo cấu hình, tấn công bất thường...
+  # ----------------------------------------------------------------------------
   - job_name: nginx-error
     static_configs:
       - targets:
@@ -45,6 +74,8 @@ scrape_configs:
         labels:
           job: nginx
           service: nginx
+          # Phân loại loại log: 'error' (lỗi / cảnh báo)
           log_type: error
           environment: production
+          # Đường dẫn chính xác đến file error.log của Nginx được mount từ volume
           __path__: /var/log/nginx/error.log

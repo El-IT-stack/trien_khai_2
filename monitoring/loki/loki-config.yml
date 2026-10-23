@@ -1,36 +1,76 @@
+# ==============================================================================
+# CẤU HÌNH HỆ THỐNG QUẢN LÝ NHẬT KÝ TẬP TRUNG GRAFANA LOKI (LOKI CONFIGURATION)
+# Loki hoạt động tương tự như Prometheus nhưng chuyên biệt cho việc lưu trữ,
+# lập chỉ mục (index) và truy vấn log của toàn bộ hệ thống với chi phí thấp.
+# ==============================================================================
+
+# Tắt chế độ xác thực đa tổ chức (multi-tenancy). 
+# Khi đặt false, hệ thống hoạt động ở chế độ đơn lẻ (single-tenant) và không yêu cầu header X-Scope-OrgID.
 auth_enabled: false
 
+# Cấu hình mạng máy chủ dịch vụ của Loki
 server:
+  # Cổng giao thức HTTP lắng nghe để nhận log đẩy lên từ Promtail và phục vụ truy vấn từ Grafana (cổng 3100)
   http_listen_port: 3100
+  # Cổng giao tiếp gRPC nội bộ giữa các thành phần của Loki (cổng 9096)
   grpc_listen_port: 9096
 
+# Cấu hình các thiết lập chung cho việc lưu trữ và phân phối dữ liệu
 common:
+  # Thư mục gốc tiền tố trên ổ đĩa để Loki lưu trữ toàn bộ dữ liệu và trạng thái
   path_prefix: /loki
+
+  # Khai báo loại bộ lưu trữ cho dữ liệu log
   storage:
+    # Sử dụng hệ thống tệp đĩa cứng cục bộ (Filesystem) thay vì các dịch vụ đám mây (S3, GCS)
     filesystem:
+      # Thư mục lưu trữ các khối log đã nén (compressed chunks of logs)
       chunks_directory: /loki/chunks
+      # Thư mục lưu trữ các file quy tắc cảnh báo (alerting & recording rules)
       rules_directory: /loki/rules
+
+  # Hệ số nhân bản dữ liệu (đặt bằng 1 vì hệ thống chỉ chạy 1 instance Loki duy nhất)
   replication_factor: 1
+
+  # Cấu hình vòng băm phân tán (Hash Ring) quản lý các nút xử lý
   ring:
+    # Địa chỉ IP nhận diện của tiến trình Loki trong hệ thống
     instance_addr: 127.0.0.1
+    # Nơi lưu trữ trạng thái khóa-giá trị (Key-Value store) của vòng băm
     kvstore:
+      # Lưu trực tiếp trong bộ nhớ RAM (inmemory) giúp tăng tốc độ và không cần phụ thuộc Consul/Etcd
       store: inmemory
 
+# Cấu hình lược đồ lưu trữ dữ liệu và chỉ mục (Index) theo thời gian
 schema_config:
   configs:
+    # Mốc thời gian bắt đầu áp dụng cấu hình lược đồ này (định dạng YYYY-MM-DD)
     - from: 2022-01-01
+      # Cơ chế lưu trữ chỉ mục: 'boltdb-shipper' sử dụng cơ sở dữ liệu BoltDB cục bộ và đồng bộ
       store: boltdb-shipper
+      # Nơi lưu trữ các đối tượng chunk log thực tế (trên hệ thống tệp cục bộ)
       object_store: filesystem
+      # Phiên bản cấu trúc lược đồ dữ liệu (v11 là phiên bản ổn định cao của Loki)
       schema: v11
+      # Cấu hình cách tạo và phân chia chỉ mục
       index:
+        # Tiền tố đặt cho tên các file chỉ mục (ví dụ: index_18990)
         prefix: index_
+        # Chu kỳ thời gian phân đoạn cho mỗi file chỉ mục (24h = tạo 1 file index mới mỗi ngày để tối ưu tìm kiếm)
         period: 24h
 
+# Cấu hình bộ đánh giá quy tắc cảnh báo tự động từ dữ liệu Log (Loki Ruler)
 ruler:
+  # Địa chỉ của dịch vụ Alertmanager để tiếp nhận và gửi cảnh báo khi phát hiện điều kiện kích hoạt
   alertmanager_url: http://localhost:9093
 
+# Cấu hình giới hạn tài nguyên và bảo vệ hệ thống tránh bị quá tải (Rate Limits & Data Retention)
 limits_config:
+  # Kích hoạt tính năng từ chối các dòng log có mốc thời gian quá cũ
   reject_old_samples: true
+  # Độ tuổi tối đa của log cũ được chấp nhận nạp vào hệ thống (168h = 7 ngày)
   reject_old_samples_max_age: 168h
+  # Tốc độ nạp log tối đa cho phép trên mỗi luồng (10 Megabytes/giây)
   ingestion_rate_mb: 10
+  # Dung lượng nạp cực đại cho phép đột biến trong thời gian ngắn (Burst limit: 20 Megabytes)
   ingestion_burst_size_mb: 20

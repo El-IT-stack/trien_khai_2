@@ -1,110 +1,187 @@
 # ==============================================================================
-# CINEEVENT SYSTEM - DOCKER COMPOSE CONFIGURATION
+# HỆ THỐNG CINEEVENT - FILE CẤU HÌNH ĐIỀU PHỐI DOCKER COMPOSE
 # Môn: Triển khai & Quản trị Hệ thống Phần mềm - Đề 11
+# Chức năng: Điều phối toàn bộ các container (Web, App, DB, Monitoring, Logging)
 # ==============================================================================
 
+# ------------------------------------------------------------------------------
+# KHỐI KHAI BÁO MẠNG (NETWORKS)
+# Thiết kế kiến trúc phân tách mạng bảo mật (Network Segmentation)
+# ------------------------------------------------------------------------------
 networks:
-  # Network 1: Frontend/Proxy network
+  # Mạng 1: Dành cho tầng Frontend / Reverse Proxy và các dịch vụ truy cập ngoài
   cineevent-frontend-net:
-    driver: bridge
-  # Network 2: Internal Backend & Database network (Isolated from Nginx)
-  cineevent-backend-net:
+    # Sử dụng driver bridge mặc định để các container cùng mạng có thể giao tiếp qua DNS nội bộ Docker
     driver: bridge
 
+  # Mạng 2: Mạng nội bộ backend & database (Cô lập hoàn toàn, không cho Nginx hay bên ngoài truy cập trực tiếp DB)
+  cineevent-backend-net:
+    # Driver bridge nội bộ cách ly dữ liệu
+    driver: bridge
+
+# ------------------------------------------------------------------------------
+# KHỐI KHAI BÁO VÙNG LƯU TRỮ VĨNH VIỄN (VOLUMES)
+# Đảm bảo dữ liệu không bị mất khi container bị tắt hoặc tạo lại
+# ------------------------------------------------------------------------------
 volumes:
+  # Lưu trữ dữ liệu các bảng và dữ liệu vật lý của MySQL
   mysql_data:
     driver: local
+
+  # Lưu trữ các file log truy cập và log lỗi của Nginx (để Promtail đọc chuyển sang Loki)
   nginx_logs:
     driver: local
+
+  # Lưu trữ file log phát sinh từ ứng dụng Node.js CineEvent Backend
   app_logs:
     driver: local
+
+  # Lưu trữ cơ sở dữ liệu chuỗi thời gian (TSDB) của Prometheus
   prometheus_data:
     driver: local
+
+  # Lưu trữ cấu hình người dùng, bảng điều khiển và phiên làm việc của Grafana
   grafana_data:
     driver: local
+
+  # Lưu trữ dữ liệu chunk và index của nhật ký tập trung Loki
   loki_data:
     driver: local
 
+# ------------------------------------------------------------------------------
+# KHỐI KHAI BÁO CÁC DỊCH VỤ (SERVICES)
+# ------------------------------------------------------------------------------
 services:
-  # ----------------------------------------------------------------------------
-  # 1. MySQL Database Service
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 1. DỊCH VỤ CƠ SỞ DỮ LIỆU MYSQL (MySQL Database Service)
+  # ============================================================================
   mysql:
+    # Sử dụng bản image MySQL 8.0.37 chính thức từ Docker Hub
     image: mysql:8.0.37
+    # Tên định danh duy nhất cho container khi chạy
     container_name: cineevent-mysql
+    # Tự động khởi động lại container trừ khi người dùng chủ động ra lệnh stop
     restart: unless-stopped
+    # Biến môi trường cấu hình mật khẩu và database khởi tạo ban đầu
     environment:
+      # Mật khẩu tài khoản quản trị cao nhất (root) lấy từ biến môi trường hoặc dùng giá trị mặc định
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Root_SecurePassword_2026!}
+      # Tên database mặc định được tạo khi container chạy lần đầu
       MYSQL_DATABASE: ${MYSQL_DATABASE:-cineevent_db}
+      # Tên tài khoản người dùng ứng dụng
       MYSQL_USER: ${MYSQL_USER:-cineevent_user}
+      # Mật khẩu bảo mật cho tài khoản người dùng ứng dụng
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-CineEvent_UserSecurePass_2026!}
+    # Lệnh bổ sung khi khởi chạy MySQL: bắt buộc sử dụng bảng mã utf8mb4 hỗ trợ đầy đủ tiếng Việt và emoji
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # Ánh xạ thư mục và file cấu hình từ máy host vào bên trong container
     volumes:
+      # Ánh xạ volume vĩnh viễn vào thư mục lưu trữ dữ liệu database của MySQL
       - mysql_data:/var/lib/mysql
+      # Ánh xạ file cấu hình bảng mã UTF-8 tùy chỉnh (chỉ đọc - read only)
+      - ./database/mysql.cnf:/etc/mysql/conf.d/charset.cnf:ro
+      # Tự động thực thi kịch bản tạo bảng (Schema) khi khởi tạo database lần đầu
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Tự động nạp dữ liệu mẫu ban đầu (Seed data)
       - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+      # Thiết lập phân quyền bảo mật chặt chẽ cho các tài khoản DB
       - ./database/permissions.sql:/docker-entrypoint-initdb.d/03-permissions.sql:ro
-    # Hardening: Do NOT expose port 3306 to public network
+    # Gia cố an ninh (Hardening): Chỉ mở cổng 3306 cho các container trong cùng Docker network, KHÔNG mở ra máy host
     expose:
       - "3306"
+    # Chỉ kết nối vào mạng backend, cách ly an toàn khỏi internet
     networks:
       - cineevent-backend-net
+    # Cơ chế kiểm tra sức khỏe dịch vụ (Healthcheck) định kỳ
     healthcheck:
+      # Lệnh kiểm tra: dùng lệnh mysqladmin ping với user root để xác nhận MySQL đã sẵn sàng nhận kết nối
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-Root_SecurePassword_2026!}"]
+      # Tần suất kiểm tra: 10 giây/lần
       interval: 10s
+      # Thời gian chờ phản hồi tối đa: 5 giây
       timeout: 5s
+      # Số lần thử lại thất bại tối đa trước khi đánh dấu container là 'unhealthy': 5 lần
       retries: 5
+      # Thời gian ân hạn chờ MySQL khởi động ban đầu trước khi tính lỗi: 20 giây
       start_period: 20s
 
-  # ----------------------------------------------------------------------------
-  # 2. phpMyAdmin Database GUI
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 2. GIAO DIỆN QUẢN TRỊ CƠ SỞ DỮ LIỆU PHPMYADMIN (phpMyAdmin Database GUI)
+  # ============================================================================
   phpmyadmin:
+    # Image phpMyAdmin bản 5.2.1 chính thức
     image: phpmyadmin/phpmyadmin:5.2.1
+    # Tên container giao diện phpMyAdmin
     container_name: cineevent-phpmyadmin
+    # Khởi động lại khi gặp sự cố trừ khi bị dừng chủ động
     restart: unless-stopped
     environment:
+      # Tên host của máy chủ MySQL mà phpMyAdmin sẽ kết nối tới (dùng service name 'mysql')
       PMA_HOST: mysql
+      # Cổng kết nối của MySQL
       PMA_PORT: 3306
+      # Giới hạn dung lượng tối đa khi tải file SQL import lên giao diện (64MB)
       UPLOAD_LIMIT: 64M
+    # Mở cổng truy cập: chỉ cho phép máy nội bộ (127.0.0.1) truy cập cổng 8085 để tăng tính bảo mật
     ports:
       - "127.0.0.1:${PMA_PORT:-8085}:80"
+    # Nằm trong mạng backend để có thể kết nối được tới service mysql
     networks:
       - cineevent-backend-net
+    # Chỉ khởi chạy phpMyAdmin sau khi dịch vụ mysql đã qua kiểm tra sức khỏe hoàn tất (healthy)
     depends_on:
       mysql:
         condition: service_healthy
 
-  # ----------------------------------------------------------------------------
-  # 3. CineEvent Backend & Web App (Express.js + HTML5)
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 3. ỨNG DỤNG CINEEVENT BACKEND & WEB APP (Node.js + Express.js + HTML5)
+  # ============================================================================
   cineevent-app:
+    # Xây dựng Docker image từ Dockerfile trong thư mục ./backend
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Tên container ứng dụng
     container_name: cineevent-app
+    # Tự khởi động lại nếu tiến trình gặp lỗi
     restart: unless-stopped
+    # Các biến môi trường nạp vào tiến trình Node.js
     environment:
+      # Chế độ chạy sản xuất (production) tối ưu tốc độ và ẩn thông tin nhạy cảm
       NODE_ENV: production
+      # Cổng mà máy chủ Express.js lắng nghe bên trong container
       PORT: 5000
+      # Chuỗi bí mật dùng để mã hóa và ký xác thực JSON Web Token (JWT)
       JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_cineevent_change_in_production_2026!}
+      # Địa chỉ máy chủ cơ sở dữ liệu kết nối nội bộ
       MYSQL_HOST: mysql
+      # Cổng dịch vụ MySQL nội bộ
       MYSQL_PORT: 3306
+      # Tên database cần truy vấn
       MYSQL_DATABASE: ${MYSQL_DATABASE:-cineevent_db}
+      # Tài khoản MySQL dùng cho ứng dụng
       MYSQL_USER: ${MYSQL_USER:-cineevent_user}
+      # Mật khẩu kết nối database của ứng dụng
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-CineEvent_UserSecurePass_2026!}
+      # Thư mục lưu trữ file log hoạt động của ứng dụng
       LOG_DIR: /var/log/cineevent
     volumes:
+      # Ánh xạ thư mục mã nguồn giao diện HTML/CSS/JS tĩnh vào container dạng chỉ đọc (ro)
       - ./frontend:/app/frontend:ro
+      # Ánh xạ volume app_logs để ghi log ra đĩa vĩnh viễn và chia sẻ cho Promtail thu thập
       - app_logs:/var/log/cineevent
+    # Chỉ mở cổng 5000 nội bộ giữa các container, không mở trực tiếp ra máy host
     expose:
       - "5000"
+    # Ứng dụng là cầu nối giữa frontend (nhận request từ Nginx) và backend (gọi dữ liệu từ MySQL)
     networks:
       - cineevent-backend-net
       - cineevent-frontend-net
+    # Đợi container MySQL hoàn toàn khỏe mạnh (healthy) mới bắt đầu khởi động backend
     depends_on:
       mysql:
         condition: service_healthy
+    # Kiểm tra định kỳ xem endpoint /health của ứng dụng Node.js có phản hồi HTTP 200 không
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/health"]
       interval: 10s
@@ -112,163 +189,223 @@ services:
       retries: 3
       start_period: 15s
 
-  # ----------------------------------------------------------------------------
-  # 4. Nginx Reverse Proxy & SSL Termination
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 4. MÁY CHỦ PROXY NGƯỢC NGINX & BẢO MẬT SSL (Nginx Reverse Proxy & SSL)
+  # ============================================================================
   nginx:
+    # Xây dựng Docker image từ Dockerfile trong thư mục ./nginx
     build:
       context: ./nginx
       dockerfile: Dockerfile
+    # Tên container Web Server / Reverse Proxy
     container_name: cineevent-nginx
     restart: unless-stopped
+    # Xuất bản (publish) cổng ra máy chủ thật (Host) để người dùng truy cập từ trình duyệt
     ports:
+      # Cổng HTTP tiêu chuẩn (sẽ được cấu hình tự động chuyển hướng sang HTTPS)
       - "80:80"
+      # Cổng HTTPS tiêu chuẩn bảo mật với chứng chỉ SSL/TLS
       - "443:443"
     volumes:
+      # Lưu file access.log và error.log vào volume chung để Promtail thu thập
       - nginx_logs:/var/log/nginx
+      # Ánh xạ thư mục chứa chứng chỉ SSL (cineevent.crt, cineevent.key) vào Nginx
       - ./certs:/etc/nginx/certs
+    # Nằm ở mạng frontend để tiếp nhận lưu lượng từ bên ngoài và chuyển tiếp đến app
     networks:
       - cineevent-frontend-net
+    # Nginx chỉ chạy sau khi ứng dụng backend đã hoàn toàn khởi động thành công (healthy)
     depends_on:
       cineevent-app:
         condition: service_healthy
+    # Kiểm tra Nginx có đang phục vụ trang trạng thái stub_status bình thường hay không
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/stub_status > /dev/null || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
 
-  # ----------------------------------------------------------------------------
-  # 5. Nginx Prometheus Exporter
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 5. CÔNG CỤ XUẤT CHỈ SỐ NGINX (Nginx Prometheus Exporter)
+  # ============================================================================
   nginx-exporter:
+    # Image chính thức từ Nginx Inc để thu thập số liệu stub_status
     image: nginx/nginx-prometheus-exporter:1.1.0
     container_name: cineevent-nginx-exporter
     restart: unless-stopped
+    # Cấu hình đường dẫn URL endpoint stub_status của Nginx để exporter đọc dữ liệu
     command:
       - -nginx.scrape-uri=http://nginx/stub_status
+    # Mở cổng 9113 để Prometheus kết nối lấy số liệu
     ports:
       - "9113:9113"
     networks:
       - cineevent-frontend-net
+    # Đợi Nginx khởi động thành công mới chạy exporter
     depends_on:
       nginx:
         condition: service_healthy
 
-  # ----------------------------------------------------------------------------
-  # 6. MySQL Prometheus Exporter
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 6. CÔNG CỤ XUẤT CHỈ SỐ CƠ SỞ DỮ LIỆU MYSQL (MySQL Prometheus Exporter)
+  # ============================================================================
   mysql-exporter:
+    # Image chính thức từ nhóm Prometheus dùng để giám sát MySQL
     image: prom/mysqld-exporter:v0.15.1
     container_name: cineevent-mysql-exporter
     restart: unless-stopped
     volumes:
+      # Nạp file cấu hình chứa thông tin tài khoản đăng nhập MySQL (.my.cnf) dạng chỉ đọc
       - ./monitoring/mysqld-exporter/.my.cnf:/etc/.my.cnf:ro
+    # Chỉ định đường dẫn tới file cấu hình thông tin kết nối
     command:
       - --config.my-cnf=/etc/.my.cnf
+    # Cổng tiêu chuẩn của mysqld_exporter để Prometheus kéo số liệu (9104)
     ports:
       - "9104:9104"
+    # Nằm trong mạng backend để kết nối trực tiếp được với container mysql
     networks:
       - cineevent-backend-net
+    # Đợi MySQL khỏe mạnh mới bắt đầu kết nối thu thập
     depends_on:
       mysql:
         condition: service_healthy
 
-  # ----------------------------------------------------------------------------
-  # 7. cAdvisor Container Metrics Collector
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 7. CÔNG CỤ GIÁM SÁT TÀI NGUYÊN CONTAINER (cAdvisor - Container Advisor)
+  # ============================================================================
   cadvisor:
+    # Image cAdvisor do Google phát triển để theo dõi tài nguyên container trong thời gian thực
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cineevent-cadvisor
     restart: unless-stopped
+    # Ánh xạ các socket và thư mục hệ thống máy chủ host để cAdvisor đọc thông số CPU/RAM thực tế
     volumes:
+      # Thư mục gốc rootfs của hệ điều hành
       - /:/rootfs:ro
+      # Socket quản lý tiến trình của Docker daemon
       - /var/run:/var/run:ro
+      # Thư mục thống kê cgroup của Linux kernel
       - /sys:/sys:ro
+      # Dữ liệu nội bộ của Docker daemon
       - /var/lib/docker/:/var/lib/docker:ro
+    # Mở cổng web UI và metrics của cAdvisor trên máy host tại cổng 8081 (ánh xạ vào 8080 của container)
     ports:
       - "8081:8080"
     networks:
       - cineevent-frontend-net
 
-  # ----------------------------------------------------------------------------
-  # 8. Prometheus Server
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 8. MÁY CHỦ THU THẬP VÀ LƯU TRỮ CHỈ SỐ PROMETHEUS (Prometheus Server)
+  # ============================================================================
   prometheus:
+    # Image Prometheus phiên bản 2.51.0
     image: prom/prometheus:v2.51.0
     container_name: cineevent-prometheus
     restart: unless-stopped
     volumes:
+      # Nạp file cấu hình danh sách các target cần scrape chỉ số (prometheus.yml)
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Lưu trữ toàn bộ dữ liệu time-series vào volume vĩnh viễn
       - prometheus_data:/prometheus
+    # Các tham số dòng lệnh khởi động máy chủ Prometheus
     command:
+      # Vị trí file cấu hình chính
       - '--config.file=/etc/prometheus/prometheus.yml'
+      # Đường dẫn lưu trữ dữ liệu cơ sở dữ liệu chuỗi thời gian TSDB
       - '--storage.tsdb.path=/prometheus'
+      # Đường dẫn thư viện giao diện dòng lệnh bảng điều khiển Prometheus
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      # Mẫu giao diện bảng điều khiển tích hợp sẵn
       - '--web.console.templates=/usr/share/prometheus/consoles'
+    # Cổng web UI và API chuẩn của Prometheus (9090)
     ports:
       - "9090:9090"
+    # Kết nối cả 2 mạng để có thể kéo metrics từ cả Frontend (Nginx, App, cAdvisor) và Backend (MySQL Exporter)
     networks:
       - cineevent-frontend-net
       - cineevent-backend-net
+    # Đợi các dịch vụ mục tiêu sẵn sàng trước khi bắt đầu giám sát
     depends_on:
       - cineevent-app
       - nginx-exporter
       - mysql-exporter
 
-  # ----------------------------------------------------------------------------
-  # 9. Grafana Visualization & Dashboards
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 9. GIAO DIỆN TRỰC QUAN HÓA & BẢNG ĐIỀU KHIỂN GRAFANA (Grafana Dashboard)
+  # ============================================================================
   grafana:
+    # Image Grafana bản 10.4.1
     image: grafana/grafana:10.4.1
     container_name: cineevent-grafana
     restart: unless-stopped
+    # Biến môi trường thiết lập bảo mật và tự động phân quyền Grafana
     environment:
+      # Tên tài khoản quản trị viên Grafana
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      # Mật khẩu quản trị viên Grafana
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-Grafana_AdminSecurePass_2026!}
+      # Tắt tính năng tự đăng ký tài khoản người dùng tự do từ trang login
       - GF_USERS_ALLOW_SIGN_UP=false
+      # Bật chế độ truy cập ẩn danh (Anonymous) giúp chấm bài hoặc xem nhanh không cần gõ login
       - GF_AUTH_ANONYMOUS_ENABLED=true
+      # Gán quyền Quản trị viên (Admin) cho người xem ở chế độ ẩn danh
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
     volumes:
+      # Lưu trữ cấu hình và dữ liệu tùy biến của Grafana vào volume vĩnh viễn
       - grafana_data:/var/lib/grafana
+      # Tự động nạp cấu hình nguồn dữ liệu (datasources) và nguồn dashboard khi khởi động
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Thư mục chứa các file JSON dashboard tự động tải vào hệ thống (cineevent-dashboard.json)
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    # Mở cổng giao diện web Grafana ra máy host tại cổng chuẩn 3000
     ports:
       - "3000:3000"
     networks:
       - cineevent-frontend-net
+    # Khởi chạy sau khi máy chủ Prometheus đã hoạt động
     depends_on:
       - prometheus
 
-  # ----------------------------------------------------------------------------
-  # 10. Loki Centralized Log Store
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 10. MÁY CHỦ QUẢN LÝ NHẬT KÝ TẬP TRUNG GRAFANA LOKI (Loki Log Store)
+  # ============================================================================
   loki:
+    # Image máy chủ lưu trữ nhật ký Grafana Loki bản 2.9.2
     image: grafana/loki:2.9.2
     container_name: cineevent-loki
     restart: unless-stopped
     volumes:
+      # Nạp file cấu hình hoạt động của Loki từ thư mục host vào container
       - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      # Lưu trữ các khối log và chỉ mục index vào volume vĩnh viễn
       - loki_data:/loki
+    # Mở cổng API 3100 của Loki để Promtail đẩy log và Grafana truy vấn log
     ports:
       - "3100:3100"
     networks:
       - cineevent-frontend-net
 
-  # ----------------------------------------------------------------------------
-  # 11. Promtail Log Collection Agent
-  # ----------------------------------------------------------------------------
+  # ============================================================================
+  # 11. ĐẠI LÝ THU THẬP VÀ ĐẨY NHẬT KÝ PROMTAIL (Promtail Log Agent)
+  # ============================================================================
   promtail:
+    # Image đại lý thu thập log Promtail bản 2.9.2 tương thích với Loki 2.9.2
     image: grafana/promtail:2.9.2
     container_name: cineevent-promtail
     restart: unless-stopped
     volumes:
+      # Nạp file cấu hình luật thu thập log của Promtail
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      # Đọc các file nhật ký truy cập và lỗi của Nginx từ volume chung (chế độ chỉ đọc :ro)
       - nginx_logs:/var/log/nginx:ro
+      # Đọc các file nhật ký hoạt động của ứng dụng CineEvent Backend từ volume chung (:ro)
       - app_logs:/var/log/cineevent:ro
+    # Tham số dòng lệnh chỉ định đường dẫn file cấu hình chính
     command:
       - -config.file=/etc/promtail/config.yml
     networks:
       - cineevent-frontend-net
+    # Chỉ khởi chạy Promtail sau khi máy chủ nhận log Loki đã sẵn sàng hoạt động
     depends_on:
       - loki

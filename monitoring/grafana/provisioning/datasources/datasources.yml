@@ -1,27 +1,65 @@
 # ==============================================================================
-# GRAFANA DATASOURCE PROVISIONING
+# CẤU HÌNH NGUỒN DỮ LIỆU TỰ ĐỘNG CHO GRAFANA (PROVISIONING DATASOURCES)
+# Giúp Grafana tự động kết nối đến Prometheus và Loki ngay khi khởi động
+# mà không cần phải vào giao diện Settings -> Data Sources để thêm thủ công.
 # ==============================================================================
 
+# Phiên bản định dạng cấu hình của Grafana provisioning (chuẩn hiện tại là 1)
 apiVersion: 1
 
+# Danh sách tất cả các nguồn dữ liệu (Datasources) cần kết nối
 datasources:
-  # 1. Prometheus Datasource
+  # ----------------------------------------------------------------------------
+  # 1. Nguồn dữ liệu Prometheus: Dùng để trực quan hóa số liệu chỉ số hiệu năng (Metrics)
+  # ----------------------------------------------------------------------------
+    # Tên hiển thị của nguồn dữ liệu trên giao diện Grafana khi tạo query/panel
   - name: Prometheus
+
+    # Loại plugin nguồn dữ liệu (ở đây là Prometheus để query PromQL)
     type: prometheus
+
+    # Chế độ truy cập 'proxy': Grafana backend sẽ đứng ra gửi request đến Prometheus thay vì trình duyệt
     access: proxy
+
+    # Địa chỉ HTTP nội bộ của service Prometheus trong mạng Docker (cổng 9090)
     url: http://prometheus:9090
+
+    # Đặt nguồn dữ liệu này làm mặc định khi tạo dashboard/panel mới
     isDefault: true
+
+    # Khóa chỉnh sửa trên giao diện UI để tránh việc vô tình sửa đổi cấu hình chuẩn
     editable: false
+
+    # Cấu hình JSON nâng cao cho nguồn dữ liệu Prometheus
     jsonData:
+      # Bước thời gian tối thiểu giữa các mẫu truy vấn (khớp với scrape_interval 5s của Prometheus)
       timeInterval: 5s
+
+      # Phương thức HTTP dùng để gửi câu truy vấn PromQL (POST giúp gửi truy vấn dài không bị giới hạn URL)
       httpMethod: POST
 
-  # 2. Loki Datasource (Centralized Logging)
+  # ----------------------------------------------------------------------------
+  # 2. Nguồn dữ liệu Loki: Dùng để truy vấn và trực quan hóa nhật ký tập trung (Centralized Logs)
+  # ----------------------------------------------------------------------------
+    # Tên hiển thị của nguồn dữ liệu log trên giao diện Grafana (Explore, Log Panels)
   - name: Loki
+
+    # Loại plugin nguồn dữ liệu (ở đây là Loki để query cú pháp LogQL)
     type: loki
+
+    # Chế độ truy cập 'proxy' để Grafana server đóng vai trò chuyển tiếp truy vấn an toàn
     access: proxy
+
+    # Địa chỉ HTTP nội bộ của service Loki trong mạng Docker (cổng 3100)
     url: http://loki:3100
+
+    # Không đặt làm mặc định (vì Prometheus đã là nguồn mặc định cho metrics)
     isDefault: false
+
+    # Khóa chỉnh sửa cấu hình từ giao diện UI
     editable: false
+
+    # Cấu hình JSON nâng cao cho nguồn dữ liệu Loki
     jsonData:
+      # Số lượng dòng log tối đa trả về trong một lần truy vấn (giới hạn 1000 dòng để tối ưu hiệu năng)
       maxLines: 1000

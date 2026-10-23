@@ -1,44 +1,78 @@
 # ==============================================================================
-# CINEEVENT PROMETHEUS CONFIGURATION
+# CẤU HÌNH HỆ THỐNG GIÁM SÁT PROMETHEUS (PROMETHEUS CONFIGURATION)
+# Quản lý tần suất thu thập dữ liệu (scrape) và khai báo các mục tiêu (targets)
+# cần lấy chỉ số hiệu năng (metrics) trong hệ sinh thái CineEvent.
 # ==============================================================================
 
+# Khối thiết lập cấu hình chung toàn cục (Global configuration)
 global:
+  # Chu kỳ thời gian Prometheus chủ động kéo (scrape) metrics từ các mục tiêu (ở đây là 5 giây/lần)
   scrape_interval: 5s
+
+  # Chu kỳ thời gian Prometheus đánh giá lại các quy tắc cảnh báo (alerting rules) hoặc quy tắc tính toán (recording rules)
   evaluation_interval: 5s
+
+  # Thời gian chờ tối đa cho mỗi lần kết nối thu thập metrics (phải nhỏ hơn scrape_interval để tránh nghẽn luồng)
   scrape_timeout: 4s
 
+# Danh sách cấu hình các tác vụ thu thập số liệu (Scrape Configurations)
 scrape_configs:
-  # 1. Prometheus self-monitoring
+  # ----------------------------------------------------------------------------
+  # 1. Tác vụ tự giám sát (Prometheus Self-Monitoring)
+  # Thu thập các chỉ số nội tại của chính server Prometheus (RAM, CPU, số lượng time-series đang lưu trữ)
+  # ----------------------------------------------------------------------------
   - job_name: 'prometheus'
+    # Khai báo địa chỉ cố định của mục tiêu (Static targets)
     static_configs:
+      # Prometheus truy cập vào chính nó thông qua cổng 9090 tại localhost
       - targets: ['localhost:9090']
 
-  # 2. CineEvent Express.js Application metrics
+  # ----------------------------------------------------------------------------
+  # 2. Thu thập chỉ số hiệu năng từ ứng dụng CineEvent Backend (Express.js)
+  # Đo lường thời gian phản hồi API (latency), số lượng request (RPS), mã lỗi HTTP 4xx/5xx,...
+  # ----------------------------------------------------------------------------
   - job_name: 'cineevent-app'
+    # Đường dẫn endpoint trên server Node.js cung cấp dữ liệu định dạng Prometheus
     metrics_path: '/metrics'
     static_configs:
+      # Tên container ứng dụng và cổng chạy ứng dụng Express nội bộ trong Docker network
       - targets: ['cineevent-app:5000']
+        # Các nhãn (labels) gắn kèm theo số liệu để dễ dàng lọc và nhóm trên Grafana
         labels:
+          # Tên định danh dịch vụ
           service: 'cineevent-app'
+          # Môi trường chạy hệ thống (production)
           environment: 'production'
 
-  # 3. Nginx Prometheus Exporter (stub_status)
+  # ----------------------------------------------------------------------------
+  # 3. Thu thập chỉ số từ Web Server Nginx (Nginx Prometheus Exporter)
+  # Đo lường số lượng kết nối đang mở (Active connections), số request đang xử lý (reading, writing, waiting)
+  # ----------------------------------------------------------------------------
   - job_name: 'nginx'
     static_configs:
+      # Địa chỉ container nginx-exporter chuyển đổi dữ liệu từ stub_status sang Prometheus metrics
       - targets: ['nginx-exporter:9113']
         labels:
           service: 'nginx'
 
-  # 4. MySQL Exporter (Database performance & connections)
+  # ----------------------------------------------------------------------------
+  # 4. Thu thập chỉ số từ Hệ quản trị cơ sở dữ liệu MySQL (MySQL Exporter)
+  # Giám sát số kết nối tới DB, số truy vấn SELECT/INSERT/UPDATE/DELETE, dung lượng InnoDB buffer pool,...
+  # ----------------------------------------------------------------------------
   - job_name: 'mysql'
     static_configs:
+      # Địa chỉ container mysql-exporter đang lắng nghe ở cổng chuẩn 9104
       - targets: ['mysql-exporter:9104']
         labels:
           service: 'mysql'
 
-  # 5. cAdvisor (Container Resource metrics)
+  # ----------------------------------------------------------------------------
+  # 5. Thu thập chỉ số tài nguyên phần cứng container (cAdvisor - Container Advisor)
+  # Giám sát phần trăm CPU, dung lượng RAM sử dụng, băng thông mạng và I/O đĩa cứng của từng container
+  # ----------------------------------------------------------------------------
   - job_name: 'cadvisor'
     static_configs:
+      # Địa chỉ container cAdvisor lắng nghe ở cổng mặc định nội bộ 8080
       - targets: ['cadvisor:8080']
         labels:
           service: 'cadvisor'

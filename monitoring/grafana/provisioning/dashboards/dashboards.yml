@@ -1,17 +1,38 @@
 # ==============================================================================
-# GRAFANA DASHBOARDS PROVISIONING
+# CẤU HÌNH TỰ ĐỘNG NẠP DASHBOARD CHO GRAFANA (PROVISIONING DASHBOARDS)
+# Giúp Grafana tự động import file JSON dashboard khi khởi động mà không cần tải thủ công qua UI.
 # ==============================================================================
 
+# Phiên bản cấu hình API provisioning của Grafana (phiên bản chuẩn hiện tại là 1)
 apiVersion: 1
 
+# Danh sách các nhà cung cấp (providers) chứa nguồn dashboard
 providers:
+    # Tên hiển thị định danh cho bộ dashboard này trong giao diện quản trị Grafana
   - name: 'CineEvent Monitoring Dashboards'
+
+    # ID của tổ chức (Organization) trong Grafana sở hữu dashboard (mặc định 1 là Main Org.)
     orgId: 1
+
+    # Tên thư mục ảo hiển thị trên menu Grafana chứa các dashboard được import vào
     folder: 'CineEvent'
+
+    # Loại nguồn cung cấp dashboard: 'file' nghĩa là đọc từ các file JSON lưu trên đĩa cứng
     type: file
+
+    # Cho phép xóa dashboard qua giao diện web (false = người dùng vẫn có thể xóa tạm thời hoặc ghi đè)
     disableDeletion: false
+
+    # Cho phép người dùng chỉnh sửa các panel trực tiếp trên giao diện web của Grafana (true/false)
     editable: true
+
+    # Khoảng thời gian (giây) Grafana tự động quét lại thư mục để cập nhật nếu file JSON có thay đổi
     updateIntervalSeconds: 10
+
+    # Cho phép lưu lại các thay đổi được thực hiện từ giao diện UI lên hệ thống
     allowUiUpdates: true
+
+    # Các tùy chọn cấu hình bổ sung cho provider loại 'file'
     options:
+      # Đường dẫn thư mục bên trong container Grafana chứa các file định nghĩa dashboard (.json)
       path: /var/lib/grafana/dashboards
